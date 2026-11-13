@@ -460,8 +460,8 @@ async function fetchStatus() {
     const key = await crypto.subtle.importKey("raw", k, "AES-GCM", false, ["decrypt"]);
     plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12) }, key, raw.slice(12));
   } catch (e) { throw new Error("解密失败：链接里 #k= 后面的钥匙不对或不完整"); }
-  const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-  return { ...JSON.parse(text), served_at: Date.now() / 1000, source: from };
+  const json = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return { ...JSON.parse(json), served_at: Date.now() / 1000, source: from };
 }
 
 async function load() {
