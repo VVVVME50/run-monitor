@@ -227,7 +227,7 @@ const STATE = {
   queued: ["", "◷", "排队"],
   idle: ["", "–", "未安排"],
 };
-const FSTATE = { done: ["good", "✓", "完成"], running: ["run", "▶", "评测中"], waiting: ["warn", "◷", "待评测"] };
+const FSTATE = { done: ["good", "✓", "完成"], counting: ["good", "✓", "已评完，统计中"], running: ["run", "▶", "评测中"], waiting: ["warn", "◷", "待评测（还没开始）"] };
 const PHASE = { exploring: "探索中", submitted: "已提交" };
 const OVER = { submitted: "已提交", idle: "空闲结束" };
 const KIND = { verdict: ["good", "✓", "出结果"], formal: ["good", "✓", "正式评测"], fault: ["bad", "✕", "故障"], block: ["warn", "!", "封锁"], over: ["", "■", "会话结束"], begin: ["run", "▶", "开始"] };
@@ -316,7 +316,7 @@ function tasksTable(s) {
     const devCell = dev ? `${dev.complete}/${dev.n} 完成 · 阶段 ${n0(dev.stage_mean * 100)}%` : '<span class="dim">–</span>';
     const f = t.formal, m = f.mean, fs = FSTATE[f.state];
     let fCell = fs ? chip(fs[0], fs[1], fs[2], f.program || "") : '<span class="dim">–</span>';
-    if (f.state === "running" || (f.state && !f.complete && m)) {
+    if (f.state === "running") {
       const eps = Object.values(f.channels).reduce((a, c) => a + c.episodes, 0);
       fCell += ` <span class="dim">${eps}/200</span>`;
     }
