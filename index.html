@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>运行监控</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f3f2ee;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --line: #e2e1dc;
+  --grid: #ebeae6;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7d7c77;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --seq-track: #e3ecf8;
+  --seq-fill: #2a78d6;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --warning-text: #8a5a00;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --info-text: #1c5cab;
+  --chip-bg: #ecebe7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #111110;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --line: #2f2f2d;
+    --grid: #2a2a28;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8e8d86;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --seq-track: #1f2a38;
+    --seq-fill: #3987e5;
+    --good-text: #4cc94c;
+    --warning-text: #fab219;
+    --info-text: #86b6ef;
+    --chip-bg: #2a2a28;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #111110;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --line: #2f2f2d;
+  --grid: #2a2a28;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --text-3: #8e8d86;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --seq-track: #1f2a38;
+  --seq-fill: #3987e5;
+  --good-text: #4cc94c;
+  --warning-text: #fab219;
+  --info-text: #86b6ef;
+  --chip-bg: #2a2a28;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+header.top { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h1 small { font-size: 13px; color: var(--text-2); font-weight: 400; margin-left: 8px; }
+h2 { font-size: 15px; margin: 0 0 10px; font-weight: 650; }
+h2 small, .muted { color: var(--text-3); font-weight: 400; font-size: 12px; }
+.fresh { color: var(--text-2); font-size: 13px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.fresh button { font: inherit; font-size: 12px; color: var(--text-2); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.banner { border: 1px solid var(--critical); border-left-width: 4px; background: var(--surface); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+.banner pre { white-space: pre-wrap; margin: 4px 0 0; font-size: 12px; color: var(--text-2); max-height: 160px; overflow: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile .label { color: var(--text-2); font-size: 12px; }
+.tile .big { font-size: 26px; font-weight: 650; line-height: 1.25; margin: 2px 0; }
+.tile .big small { font-size: 14px; font-weight: 400; color: var(--text-2); }
+.tile .sub { color: var(--text-2); font-size: 12px; }
+.acct { display: grid; grid-template-columns: 38px 1fr 44px; gap: 6px; align-items: center; font-size: 12px; margin-top: 4px; }
+.acct .name { color: var(--text-2); }
+.acct .pct { text-align: right; font-weight: 600; }
+.acct-note { grid-column: 2 / 4; color: var(--text-3); font-size: 11px; margin-top: -4px; }
+.bar { display: block; position: relative; height: 8px; background: var(--seq-track); border-radius: 4px; overflow: hidden; }
+.bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--seq-fill); border-radius: 4px; }
+.bar.warn > span { background: var(--serious); }
+.section { margin-bottom: 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 640px), 1fr)); gap: 12px; }
+.card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 8px; }
+.card-head .t { font-weight: 650; font-size: 15px; }
+.card-head .meta { color: var(--text-2); font-size: 12px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--text-2); font-size: 12px; border-bottom: 1px solid var(--line); padding: 4px 8px; white-space: nowrap; }
+td { border-bottom: 1px solid var(--grid); padding: 5px 8px; vertical-align: middle; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; }
+td.wrap { white-space: normal; }
+.chip { display: inline-flex; gap: 4px; align-items: center; border-radius: 999px; padding: 0 8px; font-size: 12px; background: var(--chip-bg); color: var(--text-2); white-space: nowrap; }
+.chip i { font-style: normal; font-weight: 700; }
+.chip.good i { color: var(--good); } .chip.good { color: var(--good-text); }
+.chip.run i { color: var(--series-1); } .chip.run { color: var(--info-text); }
+.chip.bad i { color: var(--critical); } .chip.bad { color: var(--critical); }
+.chip.warn i { color: var(--warning); } .chip.warn { color: var(--warning-text); }
+.mini { display: inline-block; vertical-align: middle; width: 70px; }
+.srbar { position: relative; width: 120px; height: 10px; background: var(--seq-track); border-radius: 4px; display: inline-block; vertical-align: middle; }
+.srbar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--seq-fill); border-radius: 4px; }
+.srbar > b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--text-2); font-size: 12px; margin: 0 0 8px; }
+.legend .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.legend .tick { display: inline-block; width: 2px; height: 12px; background: var(--text); vertical-align: middle; margin-right: 6px; }
+.legend .ln { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 4px; border-radius: 1px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: 240px; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12); display: none; white-space: nowrap; }
+.tip .row { display: flex; gap: 8px; align-items: center; }
+.tip .row b { margin-left: auto; padding-left: 12px; }
+.events { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto; }
+.events li { display: grid; grid-template-columns: 46px 64px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--grid); font-size: 12px; align-items: baseline; }
+.events li .tm { color: var(--text-3); }
+.events li .tx { color: var(--text); overflow-wrap: anywhere; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters button { font: inherit; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 12px; }
+.dim { color: var(--text-3); }
+.taskname { font-weight: 600; }
+.taskname small { font-weight: 400; color: var(--text-2); }
+details summary { cursor: pointer; color: var(--text-2); font-size: 12px; margin-top: 6px; }
+@media (max-width: 560px) {
+  .tile .big { font-size: 22px; }
+  .events li { grid-template-columns: 40px 1fr; }
+  .events li .tx { grid-column: 1 / 3; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1><span id="name">运行监控</span><small id="subtitle">读取中…</small></h1>
+    <div class="fresh"><span id="fresh">等待第一次读取…</span><button id="reload" type="button">立即刷新</button></div>
+  </header>
+  <div id="banner"></div>
+  <section class="tiles" id="tiles"></section>
+  <section class="section">
+    <h2>进行中的轮次 <small>每个种子一行：探索阶段、布局用量、预演最好成绩</small></h2>
+    <div class="cards" id="running"></div>
+  </section>
+  <section class="section card">
+    <h2>全部任务 <small>正式评测按榜单协议（四通道各 50 个布局）；开发集为轮次自己的测量</small></h2>
+    <div class="legend"><span><span class="sw" style="background:var(--seq-fill)"></span>正式评测 SR（四通道均值）</span><span><span class="tick"></span>榜上该任务最佳 SR</span></div>
+    <div class="scroll"><table id="tasks"></table></div>
+  </section>
+  <div class="two section">
+    <section class="card">
+      <h2>订阅账号额度 <small>7 天窗口已用 %，取自启动器日志里的读数</small></h2>
+      <div class="legend" id="acct-legend"></div>
+      <div class="chart" id="acct-chart"><svg role="img" aria-label="订阅账号额度随时间变化"></svg><div class="tip"></div></div>
+      <details><summary>表格</summary><div class="scroll"><table id="acct-table"></table></div></details>
+    </section>
+    <section class="card">
+      <h2>最近事件</h2>
+      <div class="filters" id="filters"></div>
+      <ul class="events" id="events"></ul>
+    </section>
+  </div>
+  <section class="section card">
+    <h2>启动器 <small>心跳 7 分钟内为在线；排队任务由在线启动器的任务列表推出</small></h2>
+    <div class="filters"><button type="button" id="show-gone" aria-pressed="false">显示已结束的</button></div>
+    <div class="scroll"><table id="launchers"></table></div>
+  </section>
+  <p class="muted" id="foot"></p>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const n1 = (x) => (x == null ? "–" : Number(x).toFixed(1));
+const n0 = (x) => (x == null ? "–" : Math.round(x).toString());
+const hm = (t) => (t ? new Date(t * 1000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }) : "–");
+const hms = (t) => (t ? new Date(t * 1000).toLocaleTimeString("zh-CN", { hour12: false }) : "–");
+function ago(s) {
+  if (s == null) return "–";
+  s = Math.max(0, s);
+  if (s < 60) return `${Math.round(s)} 秒前`;
+  if (s < 3600) return `${Math.round(s / 60)} 分钟前`;
+  return `${Math.floor(s / 3600)} 小时 ${Math.round((s % 3600) / 60)} 分前`;
+}
+function dur(s) {
+  if (s == null) return "–";
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h ? `${h} 小时 ${m} 分` : `${m} 分`;
+}
+const short = (task) => task.replace(/^\d+_/, "").replace(/_/g, " ");
+const chip = (cls, icon, text, title) => `<span class="chip ${cls}"${title ? ` title="${esc(title)}"` : ""}><i aria-hidden="true">${icon}</i>${esc(text)}</span>`;
+const bar = (frac, warn) => `<span class="bar mini${warn ? " warn" : ""}"><span style="width:${Math.max(0, Math.min(1, frac || 0)) * 100}%"></span></span>`;
+
+const STATE = {
+  running: ["run", "▶", "进行中"],
+  stalled: ["bad", "✕", "心跳超时"],
+  done: ["good", "✓", "已出结果"],
+  queued: ["", "◷", "排队"],
+  idle: ["", "–", "未安排"],
+};
+const FSTATE = { done: ["good", "✓", "完成"], running: ["run", "▶", "评测中"], waiting: ["warn", "◷", "待评测"] };
+const PHASE = { exploring: "探索中", submitted: "已提交" };
+const OVER = { submitted: "已提交", idle: "空闲结束" };
+const KIND = { verdict: ["good", "✓", "出结果"], formal: ["good", "✓", "正式评测"], fault: ["bad", "✕", "故障"], block: ["warn", "!", "封锁"], over: ["", "■", "会话结束"], begin: ["run", "▶", "开始"] };
+const ACCT_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+
+let snap = null, eventFilter = "all", showGone = false;
+// Served by scripts/monitor.py the page asks api/status. As a static copy (GitHub Pages) it reads status.enc, which
+// the copy's pusher wrote gzipped and AES-GCM encrypted; the key is in the link after #k= and never leaves the browser.
+const KEY = (location.hash.match(/k=([A-Za-z0-9_-]+)/) || [])[1];
+const STALE_S = KEY ? 1500 : 180;
+
+function tiles(s) {
+  const t = s.tasks || [], cnt = (st) => t.filter((x) => x.state === st).length;
+  const f = s.formal || {}, fe = f.over_evaluated, fa = f.over_all, top = (f.board_top || [])[0];
+  const c = s.counts || {};
+  const faults = (c.faults || 0) + (c.formal_faults || 0) + (c.stale_claims || 0);
+  const keyUse = (s.keys || []).filter((k) => !k.out).map((k) => k.key).join("、") || "无";
+  const rate = s.keys_rate != null ? `每小时约 $${n0(s.keys_rate)} · 约 ${n1(s.keys_hours)} 小时用完` : "消耗速率要采样 10 分钟以上才有";
+  const accts = Object.entries(s.accounts || {}).map(([a, v]) => {
+    const pct = v.pct ?? null, warn = pct != null && pct >= 85;
+    const notes = [];
+    if (v.rate != null) notes.push(`每小时 +${n1(v.rate)} 点`);
+    if (v.rate && pct != null) notes.push(`约 ${n1((100 - pct) / v.rate)} 小时到顶`);
+    if (v.resets_h != null) notes.push(`窗口 ${n1(v.resets_h)} 小时后重置`);
+    if (v.signin) notes.push(`登录剩 ${n1(v.signin.days)} 天`);
+    return `<div class="acct"><span class="name">${esc(a)}</span>${bar((pct || 0) / 100, warn).replace("mini", "")}<span class="pct">${n0(pct)}%</span><span class="acct-note">${esc(notes.join(" · "))}${v.t ? ` · 读数 ${hm(v.t)}` : ""}</span></div>`;
+  }).join("");
+  $("tiles").innerHTML = `
+    <div class="tile"><div class="label">第 1 轮已出结果</div><div class="big">${cnt("done")} <small>/ ${t.length} 个任务</small></div>
+      <div class="sub">进行中 ${cnt("running")} · 排队 ${cnt("queued")} · 未安排 ${cnt("idle")}${cnt("stalled") ? ` · <b style="color:var(--critical)">心跳超时 ${cnt("stalled")}</b>` : ""}</div></div>
+    <div class="tile"><div class="label">正式评测（${(f.evaluated || []).length} 个任务完成）</div><div class="big">${fe ? `Score ${n1(fe.score)}` : "–"}</div>
+      <div class="sub">${fe ? `SR ${n1(fe.sr)} · LSCR ${n1(fe.lscr)} · Eff ${fe.efficiency != null ? fe.efficiency.toFixed(2) : "–"}` : "还没有完整评测的任务"}</div>
+      <div class="sub">${fa ? `按全部 ${t.length} 个任务计 Score ${n1(fa.score)}` : ""}${top ? ` · 榜首 ${esc(top.name)} ${n1(top.score)}` : ""}</div></div>
+    <div class="tile"><div class="label">API key 余额（可用：${esc(keyUse)}）</div><div class="big">$${n0(s.keys_usable)}</div><div class="sub">${rate}</div>
+      <div class="sub">${(s.keys || []).map((k) => `${esc(k.key)} $${n0(k.left)}${k.out ? "（停用）" : ""}`).join(" · ")}</div></div>
+    <div class="tile"><div class="label">订阅账号（7 天窗口已用）</div>${accts || '<div class="sub">日志里还没有读数</div>'}</div>
+    <div class="tile"><div class="label">异常</div><div class="big" style="color:${faults ? "var(--critical)" : "inherit"}">${faults}</div>
+      <div class="sub">启动器报错 ${c.faults || 0} · 评测报错 ${c.formal_faults || 0} · 心跳超时 ${c.stale_claims || 0}</div>
+      <div class="sub">地址封锁 ${c.blocks || 0}${s.last?.block ? `（最近 ${hm(s.last.block)}）` : ""} · key 被拒 ${c.refused || 0}</div></div>`;
+}
+
+function running(s) {
+  const now = s.at;
+  const live = (s.tasks || []).filter((t) => t.state === "running" || t.state === "stalled");
+  if (!live.length) { $("running").innerHTML = '<div class="card dim">现在没有进行中的轮次</div>'; return; }
+  $("running").innerHTML = live.map((t) => {
+    const st = STATE[t.state], cl = t.claim || {};
+    const sub = t.seeds.filter((x) => x.phase === "submitted").length;
+    const best = t.board_best;
+    const rows = t.seeds.map((x) => {
+      const used = x.layouts_used ?? 0, budget = x.layouts_budget || 0;
+      const stale = x.phase === "exploring" && x.last_call_age != null && x.last_call_age > 2400;
+      return `<tr>
+        <td>${esc(x.seed)}</td>
+        <td>${x.phase === "submitted" ? chip("good", "✓", "已提交", x.submitted || "") : esc(PHASE[x.phase] || x.phase || "–")}</td>
+        <td>${bar(budget ? used / budget : 0)} <span class="dim">${used}/${budget}</span></td>
+        <td class="num">${x.programs}</td>
+        <td class="num">${x.rehearsals_complete}/${x.rehearsals}</td>
+        <td>${x.best_stage != null ? `${bar(x.best_stage)} <span class="dim">${n0(x.best_stage * 100)}%</span>` : '<span class="dim">–</span>'}</td>
+        <td class="num">${x.calls}</td>
+        <td${stale ? ' style="color:var(--warning-text)"' : ""}>${x.last_call_age != null ? ago(x.last_call_age) : "–"}</td>
+        <td>${esc(x.who || "–")}</td>
+        <td>${x.over ? esc(OVER[x.over] || x.over) : ""}${x.failures ? ` ${chip("bad", "✕", `失败 ${x.failures}`, x.last_failure || "")}` : ""}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="card">
+      <div class="card-head"><span class="t">${esc(t.num)} ${esc(short(t.task))}</span>${chip(st[0], st[1], `${st[2]} · ${cl.node || "?"} 号节点`)}
+        <span class="meta">${esc(t.round || "")} · 已运行 ${t.begun ? dur(now - t.begun) : "–"} · 心跳 ${ago(cl.age)} · 已提交 ${sub}/${t.seeds.length}${best ? ` · 榜上最佳 SR ${n1(best.sr)}` : ""}</span></div>
+      <div class="scroll"><table><thead><tr><th>种子</th><th>阶段</th><th>布局</th><th class="num" title="写出的程序数">程序</th><th class="num" title="预演完成任务次数 / 预演次数">预演完成</th><th title="所有预演里达到的最好阶段完成率">最好阶段</th><th class="num">调用</th><th>最近调用</th><th>账号</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }).join("");
+}
+
+function tasksTable(s) {
+  const head = `<thead><tr><th>任务</th><th>状态</th><th>第 1 轮（开发集）</th><th>正式评测</th><th>SR</th><th class="num">LSCR</th><th class="num">None</th><th class="num">Equi.</th><th class="num">Inv.</th><th class="num">Full</th><th>榜上该任务最佳</th></tr></thead>`;
+  const rows = (s.tasks || []).map((t) => {
+    const st = STATE[t.state];
+    let stText = st[2];
+    if (t.state === "running" || t.state === "stalled") stText += ` · ${t.claim?.node || "?"} 号`;
+    if (t.state === "queued") stText += ` · ${t.queued_on.join("、")} 号`;
+    const cv = t.curve, dev = cv?.dev;
+    const devCell = dev ? `${dev.complete}/${dev.n} 完成 · 阶段 ${n0(dev.stage_mean * 100)}%` : '<span class="dim">–</span>';
+    const f = t.formal, m = f.mean, fs = FSTATE[f.state];
+    let fCell = fs ? chip(fs[0], fs[1], fs[2], f.program || "") : '<span class="dim">–</span>';
+    if (f.state === "running" || (f.state && !f.complete && m)) {
+      const eps = Object.values(f.channels).reduce((a, c) => a + c.episodes, 0);
+      fCell += ` <span class="dim">${eps}/200</span>`;
+    }
+    const best = t.board_best;
+    const sr = m ? m.sr : null;
+    const srCell = sr != null || best ? `<span class="srbar" title="PyRUA ${n1(sr)} / 榜上最佳 ${best ? n1(best.sr) : "–"}"><span style="width:${sr || 0}%"></span>${best ? `<b style="left:${best.sr}%"></b>` : ""}</span> <b>${sr != null ? n1(sr) : ""}</b>` : '<span class="dim">–</span>';
+    const ch = (name) => { const c = f.channels[name]; return c ? `<span title="LSCR ${n1(c.lscr)}">${c.successes}/${c.episodes}</span>` : '<span class="dim">–</span>'; };
+    return `<tr>
+      <td><span class="taskname">${esc(t.num)} <small>${esc(short(t.task))}</small></span></td>
+      <td>${chip(st[0], st[1], stText, t.claim ? `${t.claim.by} · 心跳 ${ago(t.claim.age)}` : "")}</td>
+      <td title="${esc(cv?.champion || "")}">${devCell}</td>
+      <td>${fCell}</td>
+      <td>${srCell}</td>
+      <td class="num">${m ? n1(m.lscr) : '<span class="dim">–</span>'}</td>
+      <td class="num">${ch("None")}</td><td class="num">${ch("Equi.")}</td><td class="num">${ch("Inv.")}</td><td class="num">${ch("Full")}</td>
+      <td>${best ? `${n1(best.sr)} / ${n1(best.lscr)} <span class="dim">${esc(best.name)}</span>` : '<span class="dim">–</span>'}</td>
+    </tr>`;
+  }).join("");
+  $("tasks").innerHTML = head + `<tbody>${rows}</tbody>`;
+}
+
+function acctChart(s) {
+  const accts = Object.entries(s.accounts || {});
+  const svg = document.querySelector("#acct-chart svg"), tip = document.querySelector("#acct-chart .tip");
+  $("acct-legend").innerHTML = accts.map(([a], i) => `<span><span class="ln" style="background:${ACCT_COLORS[i % 3]}"></span>${esc(a)}</span>`).join("");
+  const all = accts.flatMap(([, v]) => v.series || []);
+  if (!all.length) { svg.innerHTML = ""; return; }
+  const W = svg.clientWidth || 600, H = 240, L = 40, R = 48, T = 10, B = 26;
+  const now = s.at, t0 = Math.min(...all.map((p) => p[0]));
+  const x = (t) => L + ((t - t0) / Math.max(1, now - t0)) * (W - L - R);
+  const y = (v) => T + (1 - v / 100) * (H - T - B);
+  let g = "";
+  for (const v of [0, 25, 50, 75, 100]) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-3)">${v}%</text>`;
+  const span = now - t0, step = span > 36 * 3600 ? 6 * 3600 : span > 12 * 3600 ? 3 * 3600 : span > 4 * 3600 ? 3600 : 1800;
+  for (let t = Math.ceil(t0 / step) * step; t <= now; t += step) g += `<text x="${x(t)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--text-3)">${hm(t)}</text>`;
+  const paths = accts.map(([a, v], i) => {
+    const pts = (v.series || []).slice().sort((p, q) => p[0] - q[0]);
+    if (!pts.length) return "";
+    let d = `M${x(pts[0][0])},${y(pts[0][1])}`;
+    for (let k = 1; k < pts.length; k++) d += `H${x(pts[k][0])}V${y(pts[k][1])}`;
+    d += `H${x(now)}`;
+    const last = pts[pts.length - 1];
+    return `<path d="${d}" fill="none" stroke="${ACCT_COLORS[i % 3]}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<text x="${x(now) + 6}" y="${y(last[1]) + 4}" font-size="11" fill="var(--text-2)">${esc(a)}</text>`;
+  }).join("");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = g + paths + `<line id="xh" y1="${T}" y2="${H - B}" stroke="var(--text-3)" stroke-width="1" visibility="hidden"/><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/>`;
+  const at = (pts, t) => { let v = null; for (const p of pts) { if (p[0] <= t) v = p[1]; else break; } return v; };
+  const sorted = accts.map(([a, v]) => [a, (v.series || []).slice().sort((p, q) => p[0] - q[0])]);
+  const hit = svg.querySelector("#hit"), xh = svg.querySelector("#xh");
+  hit.addEventListener("mousemove", (ev) => {
+    const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W;
+    const t = t0 + ((px - L) / (W - L - R)) * (now - t0);
+    xh.setAttribute("x1", px); xh.setAttribute("x2", px); xh.setAttribute("visibility", "visible");
+    tip.innerHTML = `<div class="dim">${hm(t)}</div>` + sorted.map(([a, pts], i) => `<div class="row"><span class="ln" style="display:inline-block;width:12px;height:2px;background:${ACCT_COLORS[i % 3]}"></span>${esc(a)}<b>${at(pts, t) == null ? "–" : n0(at(pts, t)) + "%"}</b></div>`).join("");
+    tip.style.display = "block";
+    const left = ev.clientX - r.left + 14;
+    tip.style.left = `${Math.min(left, r.width - tip.offsetWidth - 4)}px`;
+    tip.style.top = `${Math.max(0, ev.clientY - r.top - 20)}px`;
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); });
+  $("acct-table").innerHTML = `<thead><tr><th>时间</th>${accts.map(([a]) => `<th class="num">${esc(a)}</th>`).join("")}</tr></thead><tbody>` +
+    [...new Set(all.map((p) => p[0]))].sort((p, q) => q - p).slice(0, 60).map((t) => `<tr><td>${hm(t)}</td>${sorted.map(([, pts]) => `<td class="num">${n0(at(pts, t))}%</td>`).join("")}</tr>`).join("") + "</tbody>";
+}
+
+function events(s) {
+  const kinds = [["all", "全部"], ["verdict", "出结果"], ["formal", "正式评测"], ["over", "会话结束"], ["fault", "故障"], ["block", "封锁"]];
+  $("filters").innerHTML = kinds.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${k === eventFilter}">${l}</button>`).join("");
+  $("filters").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { eventFilter = b.dataset.k; events(snap); }));
+  const ev = (s.events || []).filter((e) => eventFilter === "all" || e.kind === eventFilter).slice(0, 120);
+  $("events").innerHTML = ev.map((e) => { const k = KIND[e.kind] || ["", "·", e.kind]; return `<li><span class="tm">${hm(e.t)}</span><span>${chip(k[0], k[1], k[2])}</span><span class="tx">${esc(e.text)}</span></li>`; }).join("") || '<li class="dim">没有</li>';
+}
+
+function launchers(s) {
+  const byName = Object.fromEntries((s.tasks || []).map((t) => [t.task, t]));
+  const ls = (s.launchers || []).filter((l) => showGone || l.alive);
+  $("launchers").innerHTML = `<thead><tr><th>节点</th><th>类型</th><th>状态</th><th>正在做</th><th>任务列表</th><th>卡</th><th>版本</th><th>日志</th></tr></thead><tbody>` + ls.map((l) => {
+    const list = l.kind === "formal" ? "全部（按轮次出结果的顺序）" : (l.tasks || l.list).map((name) => {
+      const t = byName[name]; const st = t ? STATE[t.state] : ["", "", ""];
+      return `<span title="${esc(name)} · ${st[2]}" style="${t && t.state === "done" ? "color:var(--text-3);text-decoration:line-through" : t && t.state === "running" ? "font-weight:650" : ""}">${esc(name.split("_")[0])}</span>`;
+    }).join(" ");
+    return `<tr><td>${esc(l.node)}</td><td>${l.kind === "formal" ? "正式评测" : "轮次"}</td><td>${l.alive ? chip("run", "●", "在线") : chip("", "○", "无心跳")}</td>
+      <td>${(l.now || []).map((x) => esc(x.split("_")[0])).join("、") || '<span class="dim">–</span>'}</td><td class="wrap">${list}</td><td>${esc(l.gpus)}</td><td>${esc(l.commit || "–")}</td><td class="dim">${esc(l.log)}</td></tr>`;
+  }).join("") + "</tbody>";
+  $("show-gone").setAttribute("aria-pressed", String(showGone));
+}
+
+function render(s) {
+  snap = s;
+  if (!s || !s.at) { $("fresh").textContent = "后台第一次读取还没完成（约 15 秒）…"; return; }
+  const age = s.served_at - s.at;
+  $("name").textContent = document.title = "PyRUA 监控";
+  $("subtitle").textContent = `${s.benchmark} · 第 ${parseInt(s.round.slice(1), 10)} 轮（${s.round}）`;
+  $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? "约每 10 分钟更新" : "每 30 秒刷新"}`;
+  $("banner").innerHTML = (s.errors || []).length ? `<div class="banner"><b>读取时出错 ${s.errors.length} 处</b><pre>${esc(s.errors.join("\n\n"))}</pre></div>` : "";
+  tiles(s); running(s); tasksTable(s); acctChart(s); events(s); launchers(s);
+  $("foot").textContent = `监控程序版本 ${s.harness} · 正式评测表计算于 ${hms(s.formal?.at)}（每 5 分钟）· 只读`;
+}
+
+async function fetchStatus() {
+  if (!KEY) return (await fetch("api/status", { cache: "no-store" })).json();
+  const r = await fetch(`status.enc?t=${Date.now()}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`status.enc: HTTP ${r.status}`);
+  const raw = Uint8Array.from(atob((await r.text()).trim()), (c) => c.charCodeAt(0));
+  const k = Uint8Array.from(atob(KEY.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  let plain;
+  try {
+    const key = await crypto.subtle.importKey("raw", k, "AES-GCM", false, ["decrypt"]);
+    plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12) }, key, raw.slice(12));
+  } catch (e) { throw new Error("解密失败：链接里 #k= 后面的钥匙不对或不完整"); }
+  const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return { ...JSON.parse(text), served_at: Date.now() / 1000 };
+}
+
+async function load() {
+  try {
+    render(await fetchStatus());
+  } catch (e) {
+    $("fresh").innerHTML = `<b style="color:var(--critical)">${KEY ? "读不到数据" : "连不上监控服务"}</b>（${esc(e.message)}）`;
+  }
+}
+$("reload").addEventListener("click", load);
+$("show-gone").addEventListener("click", () => { showGone = !showGone; launchers(snap); });
+window.addEventListener("resize", () => snap && acctChart(snap));
+load();
+setInterval(load, KEY ? 60000 : 30000);
+</script>
+</body>
+</html>
