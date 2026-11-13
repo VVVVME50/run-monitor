@@ -294,7 +294,7 @@ function running(s) {
         <td class="num">${x.calls}</td>
         <td${stale ? ' style="color:var(--warning-text)"' : ""}>${x.last_call_age != null ? ago(x.last_call_age) : "–"}</td>
         <td>${esc(x.who || "–")}</td>
-        <td>${x.over ? esc(OVER[x.over] || x.over) : ""}${x.limits ? ` ${chip("warn", "↻", `额度用完换号${x.switched ? " " + x.switched : ""}`, "账号这周的额度用完，启动器已让它换到另一个账号接着跑")}` : ""}${x.failures ? ` ${chip("bad", "✕", `失败 ${x.failures}`, x.last_failure || "")}` : ""}</td>
+        <td>${x.over ? esc(OVER[x.over] || x.over) : ""}${x.limits ? ` ${chip("warn", "↻", `额度用完换号${x.switched ? " " + x.switched : ""}`, "账号这周的额度用完，启动器已让它换到另一个账号接着跑")}` : ""}${x.failures ? ` ${x.recovered ? chip("", "↺", `出错 ${x.failures} 次，已恢复`, `${x.last_failure || ""}（之后的运行成功了）`) : chip("bad", "✕", `失败 ${x.failures}`, x.last_failure || "")}` : ""}</td>
       </tr>`;
     }).join("");
     return `<div class="card">
@@ -410,17 +410,50 @@ function render(s) {
   const age = s.served_at - s.at;
   $("name").textContent = document.title = "PyRUA 监控";
   $("subtitle").textContent = `${s.benchmark} · 第 ${parseInt(s.round.slice(1), 10)} 轮（${s.round}）`;
-  $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? "约每 10 分钟更新" : "每 30 秒刷新"}`;
+  $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? `约每 10 分钟更新${s.source ? ` · 数据来自 ${esc(s.source)}` : ""}` : "每 30 秒刷新"}`;
   $("banner").innerHTML = (s.errors || []).length ? `<div class="banner"><b>读取时出错 ${s.errors.length} 处</b><pre>${esc(s.errors.join("\n\n"))}</pre></div>` : "";
   tiles(s); running(s); tasksTable(s); acctChart(s); events(s); launchers(s);
   $("foot").textContent = `监控程序版本 ${s.harness} · 正式评测表计算于 ${hms(s.formal?.at)}（每 5 分钟）· 只读`;
 }
 
+// Where a static copy finds its status: beside the page first, then the jsDelivr mirrors of the same branch, which stay
+// reachable when github.io is not (the copy's pusher clears their cache after each push). The one that answered last
+// is asked first.
+function sources() {
+  const out = [["GitHub", "status.enc"]];
+  const owner = (location.hostname.match(/^([^.]+)\.github\.io$/) || [])[1], repo = location.pathname.split("/").filter(Boolean)[0];
+  if (owner && repo) for (const h of ["gcore.jsdelivr.net", "cdn.jsdelivr.net"]) out.push([`jsDelivr 镜像（${h.split(".")[0]}）`, `https://${h}/gh/${owner}/${repo}@gh-pages/status.enc`]);
+  return out;
+}
+let lastSource = 0;
+
+async function fetchText(url) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchStatus() {
   if (!KEY) return (await fetch("api/status", { cache: "no-store" })).json();
-  const r = await fetch(`status.enc?t=${Date.now()}`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`status.enc: HTTP ${r.status}`);
-  const raw = Uint8Array.from(atob((await r.text()).trim()), (c) => c.charCodeAt(0));
+  const list = sources(), why = [];
+  let text = null, from = null;
+  for (const i of [lastSource, ...list.keys()].filter((v, j, a) => a.indexOf(v) === j)) {
+    try {
+      text = await fetchText(list[i][1]);
+      lastSource = i;
+      from = list[i][0];
+      break;
+    } catch (e) {
+      why.push(`${list[i][0]}：${e.name === "AbortError" ? "10 秒没有回应" : e.message}`);
+    }
+  }
+  if (text == null) throw new Error(why.join("；"));
+  const raw = Uint8Array.from(atob(text.trim()), (c) => c.charCodeAt(0));
   const k = Uint8Array.from(atob(KEY.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
   let plain;
   try {
@@ -428,7 +461,7 @@ async function fetchStatus() {
     plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12) }, key, raw.slice(12));
   } catch (e) { throw new Error("解密失败：链接里 #k= 后面的钥匙不对或不完整"); }
   const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-  return { ...JSON.parse(text), served_at: Date.now() / 1000 };
+  return { ...JSON.parse(text), served_at: Date.now() / 1000, source: from };
 }
 
 async function load() {
