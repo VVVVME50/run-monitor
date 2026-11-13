@@ -19,6 +19,7 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+  --series-4: #eda100;
   --seq-track: #e3ecf8;
   --seq-fill: #2a78d6;
   --good: #0ca30c;
@@ -44,6 +45,7 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
+    --series-4: #c98500;
     --seq-track: #1f2a38;
     --seq-fill: #3987e5;
     --good-text: #4cc94c;
@@ -65,6 +67,7 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
+  --series-4: #c98500;
   --seq-track: #1f2a38;
   --seq-fill: #3987e5;
   --good-text: #4cc94c;
@@ -225,7 +228,7 @@ const FSTATE = { done: ["good", "✓", "完成"], running: ["run", "▶", "评�
 const PHASE = { exploring: "探索中", submitted: "已提交" };
 const OVER = { submitted: "已提交", idle: "空闲结束" };
 const KIND = { verdict: ["good", "✓", "出结果"], formal: ["good", "✓", "正式评测"], fault: ["bad", "✕", "故障"], block: ["warn", "!", "封锁"], over: ["", "■", "会话结束"], begin: ["run", "▶", "开始"] };
-const ACCT_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+const ACCT_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)"];
 
 let snap = null, eventFilter = "all", showGone = false;
 // Served by scripts/monitor.py the page asks api/status. As a static copy (GitHub Pages) it reads status.enc, which
@@ -237,7 +240,7 @@ function tiles(s) {
   const t = s.tasks || [], cnt = (st) => t.filter((x) => x.state === st).length;
   const f = s.formal || {}, fe = f.over_evaluated, fa = f.over_all, top = (f.board_top || [])[0];
   const c = s.counts || {};
-  const faults = (c.faults || 0) + (c.formal_faults || 0) + (c.stale_claims || 0);
+  const faults = (c.faults_recent || 0) + (c.stale_claims || 0);
   const keyUse = (s.keys || []).filter((k) => !k.out).map((k) => k.key).join("、") || "无";
   const rate = s.keys_rate != null ? `每小时约 $${n0(s.keys_rate)} · 约 ${n1(s.keys_hours)} 小时用完` : "消耗速率要采样 10 分钟以上才有";
   const accts = Object.entries(s.accounts || {}).map(([a, v]) => {
@@ -247,7 +250,8 @@ function tiles(s) {
     if (v.rate && pct != null) notes.push(`约 ${n1((100 - pct) / v.rate)} 小时到顶`);
     if (v.resets_h != null) notes.push(`窗口 ${n1(v.resets_h)} 小时后重置`);
     if (v.signin) notes.push(`登录剩 ${n1(v.signin.days)} 天`);
-    return `<div class="acct"><span class="name">${esc(a)}</span>${bar((pct || 0) / 100, warn).replace("mini", "")}<span class="pct">${n0(pct)}%</span><span class="acct-note">${esc(notes.join(" · "))}${v.t ? ` · 读数 ${hm(v.t)}` : ""}</span></div>`;
+    if (pct != null && pct >= 100) notes.unshift("已用完");
+    return `<div class="acct"><span class="name">${esc(a)}</span>${bar(Math.min(pct || 0, 100) / 100, warn).replace("mini", "")}<span class="pct">${n0(pct)}%</span><span class="acct-note">${esc(notes.join(" · "))}${v.t ? ` · 读数 ${hm(v.t)}` : ""}</span></div>`;
   }).join("");
   $("tiles").innerHTML = `
     <div class="tile"><div class="label">第 1 轮已出结果</div><div class="big">${cnt("done")} <small>/ ${t.length} 个任务</small></div>
@@ -258,9 +262,9 @@ function tiles(s) {
     <div class="tile"><div class="label">API key 余额（可用：${esc(keyUse)}）</div><div class="big">$${n0(s.keys_usable)}</div><div class="sub">${rate}</div>
       <div class="sub">${(s.keys || []).map((k) => `${esc(k.key)} $${n0(k.left)}${k.out ? "（停用）" : ""}`).join(" · ")}</div></div>
     <div class="tile"><div class="label">订阅账号（7 天窗口已用）</div>${accts || '<div class="sub">日志里还没有读数</div>'}</div>
-    <div class="tile"><div class="label">异常</div><div class="big" style="color:${faults ? "var(--critical)" : "inherit"}">${faults}</div>
-      <div class="sub">启动器报错 ${c.faults || 0} · 评测报错 ${c.formal_faults || 0} · 心跳超时 ${c.stale_claims || 0}</div>
-      <div class="sub">地址封锁 ${c.blocks || 0}${s.last?.block ? `（最近 ${hm(s.last.block)}）` : ""} · key 被拒 ${c.refused || 0}</div></div>`;
+    <div class="tile"><div class="label">最近 2 小时的异常</div><div class="big" style="color:${faults ? "var(--critical)" : "inherit"}">${faults}</div>
+      <div class="sub">报错 ${c.faults_recent || 0} · 心跳超时 ${c.stale_claims || 0}</div>
+      <div class="sub dim">今天累计：报错 ${(c.faults || 0) + (c.formal_faults || 0)}${s.last?.fault ? `（最近 ${hm(s.last.fault)}）` : ""} · 地址封锁 ${c.blocks || 0}${s.last?.block ? `（最近 ${hm(s.last.block)}）` : ""} · key 被拒 ${c.refused || 0} · 账号额度用完后换号 ${c.limits || 0} 次</div></div>`;
 }
 
 function running(s) {
@@ -284,7 +288,7 @@ function running(s) {
         <td class="num">${x.calls}</td>
         <td${stale ? ' style="color:var(--warning-text)"' : ""}>${x.last_call_age != null ? ago(x.last_call_age) : "–"}</td>
         <td>${esc(x.who || "–")}</td>
-        <td>${x.over ? esc(OVER[x.over] || x.over) : ""}${x.failures ? ` ${chip("bad", "✕", `失败 ${x.failures}`, x.last_failure || "")}` : ""}</td>
+        <td>${x.over ? esc(OVER[x.over] || x.over) : ""}${x.limits ? ` ${chip("warn", "↻", `额度用完换号${x.switched ? " " + x.switched : ""}`, "账号这周的额度用完，启动器已让它换到另一个账号接着跑")}` : ""}${x.failures ? ` ${chip("bad", "✕", `失败 ${x.failures}`, x.last_failure || "")}` : ""}</td>
       </tr>`;
     }).join("");
     return `<div class="card">
@@ -331,7 +335,7 @@ function tasksTable(s) {
 function acctChart(s) {
   const accts = Object.entries(s.accounts || {});
   const svg = document.querySelector("#acct-chart svg"), tip = document.querySelector("#acct-chart .tip");
-  $("acct-legend").innerHTML = accts.map(([a], i) => `<span><span class="ln" style="background:${ACCT_COLORS[i % 3]}"></span>${esc(a)}</span>`).join("");
+  $("acct-legend").innerHTML = accts.map(([a], i) => `<span><span class="ln" style="background:${ACCT_COLORS[i % 4]}"></span>${esc(a)}</span>`).join("");
   const all = accts.flatMap(([, v]) => v.series || []);
   if (!all.length) { svg.innerHTML = ""; return; }
   const W = svg.clientWidth || 600, H = 240, L = 40, R = 48, T = 10, B = 26;
@@ -349,7 +353,7 @@ function acctChart(s) {
     for (let k = 1; k < pts.length; k++) d += `H${x(pts[k][0])}V${y(pts[k][1])}`;
     d += `H${x(now)}`;
     const last = pts[pts.length - 1];
-    return `<path d="${d}" fill="none" stroke="${ACCT_COLORS[i % 3]}" stroke-width="2" stroke-linejoin="round"/>` +
+    return `<path d="${d}" fill="none" stroke="${ACCT_COLORS[i % 4]}" stroke-width="2" stroke-linejoin="round"/>` +
       `<text x="${x(now) + 6}" y="${y(last[1]) + 4}" font-size="11" fill="var(--text-2)">${esc(a)}</text>`;
   }).join("");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -361,7 +365,7 @@ function acctChart(s) {
     const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W;
     const t = t0 + ((px - L) / (W - L - R)) * (now - t0);
     xh.setAttribute("x1", px); xh.setAttribute("x2", px); xh.setAttribute("visibility", "visible");
-    tip.innerHTML = `<div class="dim">${hm(t)}</div>` + sorted.map(([a, pts], i) => `<div class="row"><span class="ln" style="display:inline-block;width:12px;height:2px;background:${ACCT_COLORS[i % 3]}"></span>${esc(a)}<b>${at(pts, t) == null ? "–" : n0(at(pts, t)) + "%"}</b></div>`).join("");
+    tip.innerHTML = `<div class="dim">${hm(t)}</div>` + sorted.map(([a, pts], i) => `<div class="row"><span class="ln" style="display:inline-block;width:12px;height:2px;background:${ACCT_COLORS[i % 4]}"></span>${esc(a)}<b>${at(pts, t) == null ? "–" : n0(at(pts, t)) + "%"}</b></div>`).join("");
     tip.style.display = "block";
     const left = ev.clientX - r.left + 14;
     tip.style.left = `${Math.min(left, r.width - tip.offsetWidth - 4)}px`;
