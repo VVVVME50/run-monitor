@@ -417,12 +417,12 @@ function render(s) {
 }
 
 // Where a static copy finds its status: beside the page first, then the jsDelivr mirrors of the same branch, which stay
-// reachable when github.io is not (the copy's pusher clears their cache after each push). The one that answered last
-// is asked first.
+// reachable when github.io is not. The copy's pusher purges jsDelivr after each push, which reaches cdn (Cloudflare,
+// Fastly) but not gcore: gcore can be hours behind, so it comes last. The one that answered last is asked first.
 function sources() {
   const out = [["GitHub", "status.enc"]];
   const owner = (location.hostname.match(/^([^.]+)\.github\.io$/) || [])[1], repo = location.pathname.split("/").filter(Boolean)[0];
-  if (owner && repo) for (const h of ["gcore.jsdelivr.net", "cdn.jsdelivr.net"]) out.push([`jsDelivr 镜像（${h.split(".")[0]}）`, `https://${h}/gh/${owner}/${repo}@gh-pages/status.enc`]);
+  if (owner && repo) for (const h of ["cdn.jsdelivr.net", "gcore.jsdelivr.net"]) out.push([`jsDelivr 镜像（${h.split(".")[0]}）`, `https://${h}/gh/${owner}/${repo}@gh-pages/status.enc`]);
   return out;
 }
 let lastSource = 0;
