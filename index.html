@@ -416,21 +416,25 @@ function render(s) {
   $("foot").textContent = `监控程序版本 ${s.harness} · 正式评测表计算于 ${hms(s.formal?.at)}（每 5 分钟）· 只读`;
 }
 
-// Where a static copy finds its status: beside the page first, then the jsDelivr mirrors of the same branch, which stay
-// reachable when github.io is not. The copy's pusher purges jsDelivr after each push, which reaches cdn (Cloudflare,
-// Fastly) but not gcore: gcore can be hours behind, so it comes last. The one that answered last is asked first.
+// Where a static copy finds its status: beside the page first; when github.io cannot be reached (from China at times),
+// the same file through GitHub's API (current, but 60 asks an hour for an address without a sign-in, so it is then asked
+// every 2 minutes), then the jsDelivr mirrors of the branch (their copy can be half an hour behind, gcore's more). The
+// one that answered last is asked first.
 function sources() {
   const out = [["GitHub", "status.enc"]];
   const owner = (location.hostname.match(/^([^.]+)\.github\.io$/) || [])[1], repo = location.pathname.split("/").filter(Boolean)[0];
-  if (owner && repo) for (const h of ["cdn.jsdelivr.net", "gcore.jsdelivr.net"]) out.push([`jsDelivr 镜像（${h.split(".")[0]}）`, `https://${h}/gh/${owner}/${repo}@gh-pages/status.enc`]);
+  if (owner && repo) {
+    out.push(["GitHub API", `https://api.github.com/repos/${owner}/${repo}/contents/status.enc?ref=gh-pages`, { Accept: "application/vnd.github.raw+json" }]);
+    for (const h of ["cdn.jsdelivr.net", "gcore.jsdelivr.net"]) out.push([`jsDelivr 镜像（${h.split(".")[0]}）`, `https://${h}/gh/${owner}/${repo}@gh-pages/status.enc`]);
+  }
   return out;
 }
 let lastSource = 0;
 
-async function fetchText(url) {
+async function fetchText(url, headers) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
   try {
-    const r = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
+    const r = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store", signal: ctl.signal, headers: headers || {} });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.text();
   } finally {
@@ -444,7 +448,7 @@ async function fetchStatus() {
   let text = null, from = null;
   for (const i of [lastSource, ...list.keys()].filter((v, j, a) => a.indexOf(v) === j)) {
     try {
-      text = await fetchText(list[i][1]);
+      text = await fetchText(list[i][1], list[i][2]);
       lastSource = i;
       from = list[i][0];
       break;
@@ -474,8 +478,11 @@ async function load() {
 $("reload").addEventListener("click", load);
 $("show-gone").addEventListener("click", () => { showGone = !showGone; launchers(snap); });
 window.addEventListener("resize", () => snap && acctChart(snap));
-load();
-setInterval(load, KEY ? 60000 : 30000);
+async function tick() {
+  await load();
+  setTimeout(tick, !KEY ? 30000 : lastSource === 0 ? 60000 : 120000);
+}
+tick();
 </script>
 </body>
 </html>
