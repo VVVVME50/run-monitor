@@ -237,7 +237,7 @@ let snap = null, eventFilter = "all", showGone = false;
 // Served by scripts/monitor.py the page asks api/status. As a static copy (GitHub Pages) it reads status.enc, which
 // the copy's pusher wrote gzipped and AES-GCM encrypted; the key is in the link after #k= and never leaves the browser.
 const KEY = (location.hash.match(/k=([A-Za-z0-9_-]+)/) || [])[1];
-const STALE_S = KEY ? 1500 : 180;
+const STALE_S = KEY ? 600 : 180;                         // the static copy is pushed every 2 minutes
 
 function tiles(s) {
   const t = s.tasks || [], cnt = (st) => t.filter((x) => x.state === st).length;
@@ -410,7 +410,7 @@ function render(s) {
   const age = s.served_at - s.at;
   $("name").textContent = document.title = "PyRUA 监控";
   $("subtitle").textContent = `${s.benchmark} · 第 ${parseInt(s.round.slice(1), 10)} 轮（${s.round}）`;
-  $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? `约每 10 分钟更新${s.source ? ` · 数据来自 ${esc(s.source)}` : ""}` : "每 30 秒刷新"}`;
+  $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? `约每 2 分钟更新${s.source ? ` · 数据来自 ${esc(s.source)}` : ""}` : "每 30 秒刷新"}`;
   $("banner").innerHTML = (s.errors || []).length ? `<div class="banner"><b>读取时出错 ${s.errors.length} 处</b><pre>${esc(s.errors.join("\n\n"))}</pre></div>` : "";
   tiles(s); running(s); tasksTable(s); acctChart(s); events(s); launchers(s);
   $("foot").textContent = `监控程序版本 ${s.harness} · 正式评测表计算于 ${hms(s.formal?.at)}（每 5 分钟）· 只读`;
