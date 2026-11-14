@@ -167,6 +167,10 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 12px; margin
   </header>
   <div id="banner"></div>
   <section class="tiles" id="tiles"></section>
+  <section class="section card">
+    <h2>榜单对比 <small id="board-note">榜上计入排名的方法，加上我们按全部 26 个任务算的成绩（没评完的任务按 0 分）</small></h2>
+    <div class="scroll"><table id="board"></table></div>
+  </section>
   <section class="section">
     <h2>进行中的轮次 <small>每个种子一行：探索阶段、布局用量、预演最好成绩</small></h2>
     <div class="cards" id="running"></div>
@@ -264,13 +268,31 @@ function tiles(s) {
       <div class="sub">进行中 ${cnt("running")} · 排队 ${cnt("queued")} · 未安排 ${cnt("idle")}${cnt("stalled") ? ` · <b style="color:var(--critical)">心跳超时 ${cnt("stalled")}</b>` : ""}</div></div>
     <div class="tile"><div class="label">正式评测（${(f.evaluated || []).length} 个任务完成）</div><div class="big">${fe ? `Score ${n1(fe.score)}` : "–"}</div>
       <div class="sub">${fe ? `SR ${n1(fe.sr)} · LSCR ${n1(fe.lscr)} · Eff ${fe.efficiency != null ? fe.efficiency.toFixed(2) : "–"}` : "还没有完整评测的任务"}</div>
-      <div class="sub">${fa ? `按全部 ${t.length} 个任务计 Score ${n1(fa.score)}` : ""}${top ? ` · 榜首 ${esc(top.name)} ${n1(top.score)}` : ""}</div></div>
+      <div class="sub">${fa ? `按全部 ${t.length} 个任务计 Score <b>${n1(fa.score)}</b>，排第 <b>${rankOf(s)}</b>` : ""}${top ? ` · 榜首 ${esc(top.name)} ${n1(top.score)}${fa && top.score > fa.score ? `（差 ${n1(top.score - fa.score)}）` : ""}` : ""}</div></div>
     <div class="tile"><div class="label">API key 余额（可用：${esc(keyUse)}）</div><div class="big">$${n0(s.keys_usable)}</div><div class="sub">${rate}</div>
       <div class="sub">${(s.keys || []).map((k) => `${esc(k.key)} $${n0(k.left)}${k.out ? "（停用）" : ""}`).join(" · ")}</div></div>
     <div class="tile"><div class="label">订阅账号（7 天窗口已用；每 10 分钟向后台查一次）</div>${accts || '<div class="sub">日志里还没有读数</div>'}</div>
     <div class="tile"><div class="label">最近 2 小时的异常</div><div class="big" style="color:${faults ? "var(--critical)" : "inherit"}">${faults}</div>
       <div class="sub">报错 ${c.faults_recent || 0} · 心跳超时 ${c.stale_claims || 0}</div>
       <div class="sub dim">今天累计：报错 ${(c.faults || 0) + (c.formal_faults || 0)}${s.last?.fault ? `（最近 ${hm(s.last.fault)}）` : ""} · 地址封锁 ${c.blocks || 0}${s.last?.block ? `（最近 ${hm(s.last.block)}）` : ""} · key 被拒 ${c.refused || 0} · 账号额度用完后换号 ${c.limits || 0} 次</div></div>`;
+}
+
+// Our place among the ranked entries: the 26-task numbers with every task not evaluated in full counted as nought.
+function rankOf(s) {
+  const fa = (s.formal || {}).over_all;
+  return fa ? 1 + (s.formal.board_top || []).filter((p) => p.score > fa.score).length : "–";
+}
+
+function boardTable(s) {
+  const f = s.formal || {}, fa = f.over_all, fe = f.over_evaluated, done = (f.evaluated || []).length;
+  const rows = (f.board_top || []).map((p) => ({ ...p, ours: false, ranked: true }));
+  if (fa) rows.push({ name: `PyRUA（全部 ${fa.tasks} 个任务，${fa.tasks - done} 个没评完按 0 分）`, sr: fa.sr, lscr: fa.lscr, efficiency: fa.efficiency, score: fa.score, ours: true, ranked: true });
+  if (fe && done < (fa ? fa.tasks : 26)) rows.push({ name: `PyRUA（只算评完的 ${done} 个任务，不能排名，仅供参考）`, sr: fe.sr, lscr: fe.lscr, efficiency: fe.efficiency, score: fe.score, ours: true, ranked: false });
+  rows.sort((a, b) => b.score - a.score);
+  let rank = 0;
+  $("board").innerHTML = `<thead><tr><th class="num">名次</th><th>方法</th><th class="num">SR</th><th class="num">LSCR</th><th class="num">Eff</th><th class="num">Score</th></tr></thead><tbody>` +
+    rows.map((r) => `<tr${r.ours ? ' style="font-weight:650"' : ""}><td class="num">${r.ranked ? ++rank : "–"}</td><td>${esc(r.name)}</td><td class="num">${n1(r.sr)}</td><td class="num">${n1(r.lscr)}</td><td class="num">${r.efficiency != null ? r.efficiency.toFixed(3) : "–"}</td><td class="num">${n1(r.score)}</td></tr>`).join("") + "</tbody>";
+  $("board-note").textContent = `Score = 0.45×SR + 0.45×LSCR + 10×Eff；榜单数据：${f.board_file || "–"}；我们这两行：全部 26 个任务（没评完的按 0 分），以及只算评完的任务`;
 }
 
 function running(s) {
@@ -412,7 +434,7 @@ function render(s) {
   $("subtitle").textContent = `${s.benchmark} · 第 ${parseInt(s.round.slice(1), 10)} 轮（${s.round}）`;
   $("fresh").innerHTML = `数据读取于 ${hms(s.at)}（${ago(age)}）${age > STALE_S ? ` <b style="color:var(--critical)">· 数据超过 ${Math.round(STALE_S / 60)} 分钟没更新</b>` : ""} · ${KEY ? `约每 2 分钟更新${s.source ? ` · 数据来自 ${esc(s.source)}` : ""}` : "每 30 秒刷新"}`;
   $("banner").innerHTML = (s.errors || []).length ? `<div class="banner"><b>读取时出错 ${s.errors.length} 处</b><pre>${esc(s.errors.join("\n\n"))}</pre></div>` : "";
-  tiles(s); running(s); tasksTable(s); acctChart(s); events(s); launchers(s);
+  tiles(s); boardTable(s); running(s); tasksTable(s); acctChart(s); events(s); launchers(s);
   $("foot").textContent = `监控程序版本 ${s.harness} · 正式评测表计算于 ${hms(s.formal?.at)}（每 5 分钟）· 只读`;
 }
 
