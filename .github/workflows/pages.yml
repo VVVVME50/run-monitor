@@ -25,5 +25,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # GitHub at times cannot find the artifact it was just given ("No artifacts named github-pages"): try once more
+      # after a pause, and if that fails too, warn and leave it to the next push (two minutes later) instead of failing.
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 20
+      - id: again
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deployment.outcome == 'failure' && steps.again.outcome == 'failure'
+        run: echo "::warning::deploying failed twice; the next push deploys again"
